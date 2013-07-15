@@ -63,7 +63,7 @@ class HitoriBoard(object):
 
 	def col_data(self, col, square_dict):
 		data = defaultdict(list)
-		for row in range(self.width):
+		for row in range(self.height):
 			if (row, col) in square_dict:
 				data[square_dict[(row, col)]].append(row)
 		return data
@@ -186,6 +186,70 @@ class HitoriBoard(object):
 
 		#update groups
 		return board, False, True
+
+# next step is to find patterns of  A B A  and  A A .... A which can be marked right away
+# these can never be added to, so this change should only be done once
+
+	def set_initial_squares(self):
+		#in order for this to work properly, it needs to be tested for all squares
+		#assumption is that only unknowns exist at this point
+		board = self
+		error = False
+		changed = False
+
+		row_data = [self.row_data(row, self.unknown) for row in range(self.height)]
+		col_data = [self.col_data(col, self.unknown) for col in range(self.width)]
+		print col_data
+		for row, values in enumerate(row_data):
+			for number in values:
+				if len(values[number]) > 1:
+					number_set  = set(values[number])
+					#look for values that differ by 2, if they exist, then set the square in-between to white
+					for col in number_set:
+						if col+2 in number_set:
+							board, error, changed = board.set_white(row, col + 1)
+							if error:
+								return None, True, False
+					#look for adjacent values, if they exist set any others in set to black
+					for col in number_set:
+						if col+1 in number_set:
+							for other_col in number_set:
+								if other_col != col and other_col != col + 1:
+									board, error, changed = board.set_black(row, other_col)
+									if error:
+										return None, True, False
+		for col, values in enumerate(col_data):
+			for number in values:
+				if len(values[number]) > 1:
+					number_set  = set(values[number])
+					#look for values that differ by 2, if they exist, then set the square in-between to white
+					for row in number_set:
+						if row+2 in number_set:
+							board, error, changed = board.set_white(row + 1, col)
+							if error:
+								return None, True, False
+					#look for adjacent values, if they exist set any others in set to black
+					for row in number_set:
+						if row+1 in number_set:
+							for other_row in number_set:
+								if other_row != row and other_row != row + 1:
+									board, error, changed = board.set_black(other_row, col)
+									if error:
+										return None, True, False
+
+		return board, error, changed
+
+		#repeat for column data
+
+
+
+
+
+
+
+
+
+
 
 
 
