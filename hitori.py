@@ -70,11 +70,6 @@ class HitoriBoard(object):
 
 	#these are internal to set_white/set_black and should not be called from anywhere else
 	def change_to_black(self, row, col):
-		if (row, col) in self.black:
-			return self, False, False
-		if (row, col) in self.white:
-			data_log.append('ERROR: change_to_black (%d,%d) is white' % (row, col))
-			return None, True, False
 		if (row, col) not in self.unknown:
 			data_log.append('ERROR: change_to_black (%d,%d) is not unknown' % (row, col))
 			return None, True, False
@@ -88,11 +83,6 @@ class HitoriBoard(object):
 		return HitoriBoard(self.width, self.height, self.group_index, new_unknown, new_black, self.white, self.groups), False, True
 
 	def change_to_white(self, row, col):
-		if (row, col) in self.white:
-			return self, False, False
-		if (row, col) in self.black:
-			data_log.append('ERROR: change_to_white (%d,%d) is black' % (row, col))
-			return None, True, False
 		if (row, col) not in self.unknown:
 			data_log.append('ERROR: change_to_white (%d,%d) is not unknown' % (row, col))
 			return None, True, False
