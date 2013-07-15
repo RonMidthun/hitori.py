@@ -51,12 +51,8 @@ class HitoriBoard(object):
 			out.append('\n')
 		return ''.join(out)
 
-	#will also have a number of methods to get squares matching row, column or number
 	# generally, for a given row or column we want a dict where number tells the index in the row
 	# so a row   1  2  1  3  6  2  would appear as  { 1:[0, 2], 2:[1, 5], 3:[3], 6:[4] }
-	# this would be simple enough to calculate and generally would apply to unknowns
-
-	# need a way to get all corner neighbors, including marking edges
 	#extract from a given dictionary
 	def row_data(self, row, square_dict):
 		data = defaultdict(list)
@@ -72,24 +68,12 @@ class HitoriBoard(object):
 				data[square_dict[(row, col)]].append(row)
 		return data
 
-
-
-	# all routines to set values will return (new_board, error?, changes_made?)
-	#   set_white (rule 1)
-	#   set_black (rule 2/ 7)
-	#   initial_solve (rule 3/4)
-	#   set_singletons_white  (rule 5)a
-	#   merge_groups (rule 8)
-	#   breadth_first
-	#	backtracking is probably outside this class, as well as the general framework calling these routines
-
 	#these are internal to set_white/set_black and should not be called from anywhere else
 	def change_to_black(self, row, col):
+		if (row, col) in self.black:
+			return self, False, False
 		if (row, col) in self.white:
 			data_log.append('ERROR: change_to_black (%d,%d) is white' % (row, col))
-			return None, True, False
-		if (row, col) in self.black:
-			data_log.append('ERROR: change_to_black (%d,%d) is black' % (row, col))
 			return None, True, False
 		if (row, col) not in self.unknown:
 			data_log.append('ERROR: change_to_black (%d,%d) is not unknown' % (row, col))
@@ -105,8 +89,7 @@ class HitoriBoard(object):
 
 	def change_to_white(self, row, col):
 		if (row, col) in self.white:
-			data_log.append('ERROR: change_to_white (%d,%d) is white' % (row, col))
-			return None, True, False
+			return self, False, False
 		if (row, col) in self.black:
 			data_log.append('ERROR: change_to_white (%d,%d) is black' % (row, col))
 			return None, True, False
@@ -122,10 +105,20 @@ class HitoriBoard(object):
 		data_log.append('SET: change_to_white (%d,%d)' % (row, col))
 		return HitoriBoard(self.width, self.height, self.group_index, new_unknown, self.black, new_white, self.groups), False, True
 
+	# all routines to set values will return (new_board, error?, changes_made?)
+	#   set_white (rule 1)
+	#   set_black (rule 2/ 7)
+	#   initial_solve (rule 3/4)
+	#   set_singletons_white  (rule 5)a
+	#   merge_groups (rule 8)
+	#   breadth_first
+	#	backtracking is probably outside this class, as well as the general framework calling these routines
 
 	def set_white(self, row, col):
-		if (row, col) not in self.unknown:
-			data_log.append('ERROR: set_white (%d,%d) not in unknown' % (row, col))			
+		if (row, col) in self.white:
+			return self, False, False
+		if (row, col) in self.black:
+			data_log.append('ERROR: set_white (%d,%d) in black' % (row, col))			
 			return None, True, False
 		number = self.unknown[(row, col)]
 
@@ -151,25 +144,29 @@ class HitoriBoard(object):
 		other_rows = unknown_col.get(number)
 		if other_rows:
 			for other_row in other_rows:
-				if (other_row, col) not in board.black:	 #it might have been set by earlier loop
-					board, error, changed = board.set_black(other_row, col)
-					if error:
-						return None, True, False
+				board, error, changed = board.set_black(other_row, col)
+				if error:
+					return None, True, False
 
-		# unknown_row = board.row_data(row, board.unknown)
-		# other_cols = unknown_row.get(number)
-		# if other_cols:
-		# 	for other_col in other_cols:
-		# 		if (row, other_col) not in board.black:	 #it might have been set by earlier loop
-		# 			board, error, changed = board.set_black(row, other_col)
-		# 			if error:
-		# 				return None, True, False
+		unknown_row = board.row_data(row, board.unknown)
+		other_cols = unknown_row.get(number)
+		if other_cols:
+			for other_col in other_cols:
+				board, error, changed = board.set_black(row, other_col)
+				if error:
+					return None, True, False
 
 		return board, False, True
 
 
 	def set_black(self, row, col):
 		#check for neighboring black cells
+		if (row, col) in self.black:
+			return self, False, False
+		if (row, col) in self.white:
+			data_log.append('ERROR: set_black (%d,%d) in white' % (row, col))			
+			return None, True, False
+
 		neighbors = set()
 		if row > 0:
 			neighbors.add((row - 1, col))
@@ -193,10 +190,9 @@ class HitoriBoard(object):
 
 		#set neighbors to white
 		for neighbor in neighbors:
-			if neighbor not in board.white:	#it could have been set from another cascade
-				board, error, changed = board.set_white(*neighbor)
-				if error:
-					return None, True, False
+			board, error, changed = board.set_white(*neighbor)
+			if error:
+				return None, True, False
 
 		#update groups
 		return board, False, True
