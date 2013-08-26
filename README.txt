@@ -13,10 +13,10 @@ A simple puzzle:
 Instructions:
   Blacken out numbers to meet the following criteria:
 	1) A given row or column will have at most one of a given number
-	2) No black sqaures are next to each other horizontally or vertically
+	2) No black squares are next to each other horizontally or vertically
 	3) All white squares are connected via a horizontal/vertical path
 
-The sample solution:
+The sample solution (X=black):
 
 4  X  2  X  3
 3  4  1  5  2
@@ -25,57 +25,125 @@ X  3  5  4  1
 5  1  X  2  X
 
 
+From the instructions, a few basic rules for solving the puzzle can be determined.
+
 Basic rules:
 
 1) When placing a white square, all matching numbers in row/column are black
 2) When placing black, all neighboring squares are white
 3) If a number is surrounded by the same number on both sides, it is white   1 2 1 == Unknown White Unknown
-4) If a number appears next to itself, all other numbers on that line must be black
+	If this number were black, then two whites with the same number would appear
+
+4) If a number appears next to itself, all other of the same numbers on that line must be black
+	There can be only one white, since two black numbers cannot be adjancent, it must be one of the two.
 
 
+* 3.5) From these two, you can determine that 3 in a row must be black/white/black, this is helpful in solving by hand but isn't needed here.
 
-3.5) From these two, you can determine that 3 in a row must be black/white/black, this is helpful in solving by hand but isn't needed here.
 
-These are the basic rules, 3 and 4 can be used to place initial positions while 1 & 2 are used each time a square is determined.
 
 5) If a square does not have a match in row or column, it is white.
 	This one is a bit harder to reason, but it comes down to assuming that there's one answer.   In order for that to be true, every square needs to be forced to an answer.  White can be forced by being next to black or avoiding enclosures.  Black is forced by a white in the same row or column.  Therefore, if there are no matching numbers, then the force must be to white.  Enclosure is non-local and harder to predetermine
 
 	Another way to look at it, if a given black square has no white matches in row or column, would there be any reason it couldn't also be white?   If it's valid black then all neighbors are white, so it can't cause two blacks to be next to each other. Adding another white in the midst of existing ones also can't cause the whites to get disconnected.  Therefore such a black square could also be white, breaking the idea that only one answer exists.  By assuming the white, we'll effectively be choosing a specific answer.
 
-Rule 5 can be evaluated each time a black square is filled in.
 
-6) Adjacent pairs must be filled in opposing squares:    1  1  ==  W  B  or  B  W
-														 2  2      B  W      W  B
+6) Adjacent pairs must be filled in opposing squares:    
+1  1  ==  W  B  or  B  W
+2  2      B  W      W  B
 
-Rule 6 is harder to check for programmatically, but it's used in several edge cases which could be hardcoded.  The square in the corner would be a good example.
+Rule 6 is harder to check for programmatically, but it's used in several edge cases which could be hardcoded.  The square in the corner would be a good example.  This is used frequently in hand solving.
 
 
-The other rules are based on the requirement that white connect.  These are by necessity non-local.
-Black squares that are connected will be considered to be in a group.  This group may also be listed as "grounded" if there's an edge in the group.
-There's also a virtually connected group.  This is where the same number (in a row/column) in two places would connect the groups.  One of these must be black.  It also leads to a rule where any other values in that row must be black as well. 
+Other rules are based on the requirement that white connect.  These are by necessity non-local.
+
+Black squares that are connected will be considered to be in a group.  This group may also be listed as "grounded" if any part of the group is 
+touching the edge of the board.  When a square is to be marked black, the four diagonals may contain black squares or be off the edge of the board. 
+If a solid chain of black squares connects to the edge in two locations or has a loop within in, the white connection requirement will fail.
+
+Exhaustive list of possible Hitori patterns
+E = edge (only needs to register once)
+G1 = grounded group
+U1 = ungrounded group
+X = any group, used to avoid repeating error states needlessly
+each group is given a distinct number
+
+for the result
+:Gx - means to combine all the groups and the new value into a new grounded group
+:Ux - means to combine all into an ungrounded group
+:ERROR, cuts - means that this would result in cutting the white area into two pieces
+:ERROR, loop - means that this would give the group a loop
+
+First possibility is nothing at all:
+nothing: Ux <= test
+
+with edge, only two other groups are possible
+E: Gx
+E, U1: Gx
+E, G1: ERROR, cuts white area in two 
+E, U1, U1: ERROR, closing a loop
+E, U1, U2: Gx
+E, U1, G1: ERROR, cuts
+E, G1, G1: ERROR, loop
+E, G1, G2: ERROR, cuts
+
+without edge, there are up to four possible groups
+One group
+U1: Ux
+G1: Gx
+
+Two groups
+U1, U1: ERROR, loop
+U1, U2: Ux
+U1, G1: Gx
+G1, G1: ERROR, loop
+G1, G2: ERROR, cuts
+
+Three groups - most of these values devolve into an error state from two groups
+U1, U2, U3: Ux
+U1, U2, G3: Gx
+
+Four groups - pretty much the same
+U1, U2, U3, U4: Ux
+U1, U2, U3, G4: Gx
+
+
+Rule 7 distills these down into a few simple steps
 
 7) Upon placement of a black:
+	ground_count = 0
+	has_edge = 0
+	diagonal_groups = set()
 	check each of the diagonal values
-		If edge then mark EDGE
-		If black, then note the group that square belongs to.   
-	The following results are possible:  (Grounded edges will be listed with a G, ungrounded U, don't case X)
-		Nothing: new group with this square
-		EDGE: new group with this square
-		EDGE, G1:  ERROR condition, will cause G1 to touch two edges
-		EDGE, U1:  add to U, mark U grounded (G1)
-		G1, G2: ERROR, resulting group would touch two edges
-		X1, X1: ERROR, closing a loop
-		X1, U2: change all squares in U2 to X1, add new one
+		If off the edge, has_edge = 1, if diagonal_groups > 0, return ERROR, cuts
+		If contains a black square, find the associated group
+			if diagonal_groups contains group, return ERROR, loop
+			if grounded, increment ground_count, if has_edge + ground_count > 1, return ERROR, cuts
+			add group to diagonal_groups
+	make a new group out of all items in diagonal_groups and the new square
+	if has_edge + ground_count == 1, mark new group as grounded
 
-		for cases of 3 or 4 matches (EDGE is impossible in this case), check for (G1,G2) or (X1, X1) condition for failure
-		in all others, combine together and set to G if any source was G.
+There's also a "virtually" connected group.  This is where the same number (in a row/column) in two places would connect the groups.  One of these must be black.  It also leads to a rule where any other values in that row must be black as well.    An example:
+
+	...
+	| 1  2  3  4  5	...
+	| X  5  X  4  6
+	| 7  2  9  X  1
+	....
+
+The left X is touching the edge of the board and is therefore grounded.   The second column contains 2 "2" values, one of these must be black.  (In fact, one must be white as well to avoid cutting off the 5 completely).  Regardless of which 2 is black, the X will be connected to the other X's shown.   Since these will be connected one way or another with the left X and thus the side, the entire group is grounded.  
 
 8) For pairs of white numbers in a row or column, find any groups that touch at corners.
 	If the same group touches both, then combine those groups together
 		Any squares other than those two will be set black
 
-And for finding errors:
+This rule as written will fail since when we go to fill in the connector, it will register as a loop.
+We need a means to mark that these squares are potentially members of the combined group and thus an exception to the error checks.
+
+
+
+
+Finally, for finding errors:
 9) If you place two whites with the same number in row or column, ERROR
 
 
